@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
+import { updateGroupSettlements } from "../utils/settlementCalculator.js";
 
 // Get all expenses for a group
 export async function getGroupExpenses(req: AuthRequest, res: Response) {
@@ -45,7 +46,7 @@ export async function getGroupExpenses(req: AuthRequest, res: Response) {
 }
 
 // Get specific expense details
-export async function getExpenseDetails(req: AuthRequest, res: Response) {
+/*export async function getExpenseDetails(req: AuthRequest, res: Response) {
   try {
     const { groupId, expenseId } = req.params;
 
@@ -87,7 +88,7 @@ export async function getExpenseDetails(req: AuthRequest, res: Response) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
   }
-}
+}*/
 
 // Create new expense
 export async function createExpense(req: AuthRequest, res: Response) {
@@ -99,7 +100,6 @@ export async function createExpense(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: "Missing required parameters" });
     }
 
-    // Check if user is member of the group
     const membership = await prisma.groupMember.findFirst({
       where: { groupId, userId: req.userId },
     });
@@ -140,6 +140,14 @@ export async function createExpense(req: AuthRequest, res: Response) {
       },
     });
 
+    // Automatically update settlements for the group
+    try {
+      await updateGroupSettlements(groupId);
+    } catch (settlementError) {
+      console.error("Error updating settlements:", settlementError);
+      // Don't fail the expense creation if settlement update fails
+    }
+
     res.status(201).json(expense);
   } catch (error) {
     console.error(error);
@@ -151,7 +159,7 @@ export async function createExpense(req: AuthRequest, res: Response) {
 export async function updateExpense(req: AuthRequest, res: Response) {
   try {
     const { groupId, expenseId } = req.params;
-    const { description, amount } = req.body;
+    const { description, amount, splits } = req.body;
 
     if (!groupId || !expenseId || !req.userId) {
       return res.status(400).json({ message: "Missing required parameters" });
@@ -175,22 +183,58 @@ export async function updateExpense(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Expense not found" });
     }
 
-    const updatedExpense = await prisma.expense.update({
-      where: { id: expenseId },
-      data: { description, amount },
-      include: {
-        paidBy: {
-          select: { id: true, name: true, email: true },
-        },
-        splits: {
-          include: {
-            user: {
-              select: { id: true, name: true, email: true },
+    // Use transaction to update expense and splits atomically
+    const updatedExpense = await prisma.$transaction(async (tx) => {
+      // Update the expense
+      const expense = await tx.expense.update({
+        where: { id: expenseId },
+        data: { description, amount },
+      });
+
+      // If splits are provided, replace all existing splits
+      if (splits && Array.isArray(splits)) {
+        // Delete existing splits
+        await tx.expenseSplit.deleteMany({
+          where: { expenseId },
+        });
+
+        // Create new splits if any provided
+        if (splits.length > 0) {
+          await tx.expenseSplit.createMany({
+            data: splits.map((split: any) => ({
+              expenseId,
+              userId: split.userId,
+              amountOwed: split.amountOwed,
+            })),
+          });
+        }
+      }
+
+      // Return updated expense with splits
+      return await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: {
+          paidBy: {
+            select: { id: true, name: true, email: true },
+          },
+          splits: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
             },
           },
         },
-      },
+      });
     });
+
+    // Automatically update settlements for the group
+    try {
+      await updateGroupSettlements(groupId);
+    } catch (settlementError) {
+      console.error("Error updating settlements:", settlementError);
+      // Don't fail the expense update if settlement update fails
+    }
 
     res.json(updatedExpense);
   } catch (error) {
@@ -239,120 +283,15 @@ export async function deleteExpense(req: AuthRequest, res: Response) {
       where: { id: expenseId },
     });
 
+    // Automatically update settlements for the group
+    try {
+      await updateGroupSettlements(groupId);
+    } catch (settlementError) {
+      console.error("Error updating settlements:", settlementError);
+      // Don't fail the expense deletion if settlement update fails
+    }
+
     res.json({ message: "Expense deleted successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
-// Add expense split
-export async function addExpenseSplit(req: AuthRequest, res: Response) {
-  try {
-    const { groupId, expenseId } = req.params;
-    const { userId, amountOwed } = req.body;
-
-    if (!groupId || !expenseId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    // Check if user is member of the group
-    const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: req.userId },
-    });
-
-    if (!membership) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    // Check if expense exists
-    const expense = await prisma.expense.findFirst({
-      where: { id: expenseId, groupId },
-    });
-
-    if (!expense) {
-      return res.status(404).json({ message: "Expense not found" });
-    }
-
-    const split = await prisma.expenseSplit.create({
-      data: {
-        expenseId,
-        userId,
-        amountOwed,
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
-
-    res.status(201).json(split);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
-// Update expense split
-export async function updateExpenseSplit(req: AuthRequest, res: Response) {
-  try {
-    const { groupId, expenseId, splitId } = req.params;
-    const { amountOwed } = req.body;
-
-    if (!groupId || !expenseId || !splitId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    // Check if user is member of the group
-    const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: req.userId },
-    });
-
-    if (!membership) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const updatedSplit = await prisma.expenseSplit.update({
-      where: { id: splitId },
-      data: { amountOwed },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
-
-    res.json(updatedSplit);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
-// Delete expense split
-export async function deleteExpenseSplit(req: AuthRequest, res: Response) {
-  try {
-    const { groupId, expenseId, splitId } = req.params;
-
-    if (!groupId || !expenseId || !splitId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    // Check if user is member of the group
-    const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: req.userId },
-    });
-
-    if (!membership) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    await prisma.expenseSplit.delete({
-      where: { id: splitId },
-    });
-
-    res.json({ message: "Expense split deleted successfully" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });

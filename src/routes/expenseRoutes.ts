@@ -3,12 +3,8 @@ import { verifyToken } from "../middlewares/authMiddleware.js";
 import {
   createExpense,
   getGroupExpenses,
-  getExpenseDetails,
   updateExpense,
   deleteExpense,
-  addExpenseSplit,
-  updateExpenseSplit,
-  deleteExpenseSplit,
 } from "../controllers/expenseController.js";
 
 const router = express.Router();
@@ -17,7 +13,7 @@ const router = express.Router();
 router.get("/:groupId/expenses", verifyToken, getGroupExpenses);
 
 // Get specific expense details
-router.get("/:groupId/expenses/:expenseId", verifyToken, getExpenseDetails);
+//router.get("/:groupId/expenses/:expenseId", verifyToken, getExpenseDetails);
 
 // Create new expense
 router.post("/:groupId/expenses", verifyToken, createExpense);
@@ -27,26 +23,5 @@ router.put("/:groupId/expenses/:expenseId", verifyToken, updateExpense);
 
 // Delete expense
 router.delete("/:groupId/expenses/:expenseId", verifyToken, deleteExpense);
-
-// Add expense split
-router.post(
-  "/:groupId/expenses/:expenseId/splits",
-  verifyToken,
-  addExpenseSplit
-);
-
-// Update expense split
-router.put(
-  "/:groupId/expenses/:expenseId/splits/:splitId",
-  verifyToken,
-  updateExpenseSplit
-);
-
-// Delete expense split
-router.delete(
-  "/:groupId/expenses/:expenseId/splits/:splitId",
-  verifyToken,
-  deleteExpenseSplit
-);
 
 export default router;

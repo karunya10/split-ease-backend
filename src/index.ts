@@ -6,6 +6,7 @@ import groupRoutes from "./routes/groupRoutes.js";
 import memberRoutes from "./routes/memberRoutes.js";
 import expenseRoutes from "./routes/expenseRoutes.js";
 import settlementRoutes from "./routes/settlementRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import { verifyToken } from "./middlewares/authMiddleware.js";
 
 dotenv.config();
@@ -15,6 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRoutes);
+app.use("/users", userRoutes);
 app.use("/groups", groupRoutes);
 app.use("/groups", memberRoutes);
 app.use("/groups", expenseRoutes);

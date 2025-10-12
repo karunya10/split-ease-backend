@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
+import { getUserSettlementSummary } from "../utils/settlementCalculator.js";
 
 // Get all settlements for a group
 export async function getGroupSettlements(req: AuthRequest, res: Response) {
@@ -72,153 +73,6 @@ export async function getUserSettlements(req: AuthRequest, res: Response) {
   }
 }
 
-// Get specific settlement details
-export async function getSettlementDetails(req: AuthRequest, res: Response) {
-  try {
-    const { settlementId } = req.params;
-
-    if (!settlementId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    const settlement = await prisma.settlement.findUnique({
-      where: { id: settlementId },
-      include: {
-        fromUser: {
-          select: { id: true, name: true, email: true },
-        },
-        toUser: {
-          select: { id: true, name: true, email: true },
-        },
-        group: {
-          select: { id: true, name: true },
-        },
-      },
-    });
-
-    if (!settlement) {
-      return res.status(404).json({ message: "Settlement not found" });
-    }
-
-    // Check if user is involved in the settlement
-    if (
-      settlement.fromUserId !== req.userId &&
-      settlement.toUserId !== req.userId
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    res.json(settlement);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
-// Create new settlement
-export async function createSettlement(req: AuthRequest, res: Response) {
-  try {
-    const { groupId } = req.params;
-    const { fromUserId, toUserId, amount } = req.body;
-
-    if (!groupId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    // Check if user is member of the group
-    const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: req.userId },
-    });
-
-    if (!membership) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    // Verify both users are members of the group
-    const fromMember = await prisma.groupMember.findFirst({
-      where: { groupId, userId: fromUserId },
-    });
-
-    const toMember = await prisma.groupMember.findFirst({
-      where: { groupId, userId: toUserId },
-    });
-
-    if (!fromMember || !toMember) {
-      return res
-        .status(400)
-        .json({ message: "Both users must be members of the group" });
-    }
-
-    const settlement = await prisma.settlement.create({
-      data: {
-        fromUserId,
-        toUserId,
-        groupId,
-        amount,
-      },
-      include: {
-        fromUser: {
-          select: { id: true, name: true, email: true },
-        },
-        toUser: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
-
-    res.status(201).json(settlement);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
-// Update settlement
-export async function updateSettlement(req: AuthRequest, res: Response) {
-  try {
-    const { settlementId } = req.params;
-    const { amount } = req.body;
-
-    if (!settlementId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
-    }
-
-    const settlement = await prisma.settlement.findUnique({
-      where: { id: settlementId },
-    });
-
-    if (!settlement) {
-      return res.status(404).json({ message: "Settlement not found" });
-    }
-
-    // Only involved users can update the settlement
-    if (
-      settlement.fromUserId !== req.userId &&
-      settlement.toUserId !== req.userId
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const updatedSettlement = await prisma.settlement.update({
-      where: { id: settlementId },
-      data: { amount },
-      include: {
-        fromUser: {
-          select: { id: true, name: true, email: true },
-        },
-        toUser: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
-
-    res.json(updatedSettlement);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-
 // Mark settlement as paid (this could be implemented with a status field)
 export async function markSettlementPaid(req: AuthRequest, res: Response) {
   try {
@@ -236,6 +90,11 @@ export async function markSettlementPaid(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Settlement not found" });
     }
 
+    // Check if settlement is already paid
+    if (settlement.status === "PAID") {
+      return res.status(400).json({ message: "Settlement is already paid" });
+    }
+
     // Only the person who owes money can mark as paid
     if (settlement.fromUserId !== req.userId) {
       return res
@@ -243,10 +102,10 @@ export async function markSettlementPaid(req: AuthRequest, res: Response) {
         .json({ message: "Only the payer can mark settlement as paid" });
     }
 
-    // For now, we'll delete the settlement to mark it as "paid"
-    // In a real app, you might want to add a "status" field instead
-    await prisma.settlement.delete({
+    // Update settlement status to paid instead of deleting
+    await prisma.settlement.update({
       where: { id: settlementId },
+      data: { status: "PAID" },
     });
 
     res.json({ message: "Settlement marked as paid" });
@@ -256,36 +115,32 @@ export async function markSettlementPaid(req: AuthRequest, res: Response) {
   }
 }
 
-// Delete settlement
-export async function deleteSettlement(req: AuthRequest, res: Response) {
+// Get user settlement summary
+export async function getUserSettlementSummaryEndpoint(
+  req: AuthRequest,
+  res: Response
+) {
   try {
-    const { settlementId } = req.params;
+    const { groupId } = req.params;
 
-    if (!settlementId || !req.userId) {
-      return res.status(400).json({ message: "Missing required parameters" });
+    if (!req.userId) {
+      return res.status(400).json({ message: "Missing user ID" });
     }
 
-    const settlement = await prisma.settlement.findUnique({
-      where: { id: settlementId },
-    });
+    // If groupId is provided, check if user is member of the group
+    if (groupId) {
+      const membership = await prisma.groupMember.findFirst({
+        where: { groupId, userId: req.userId },
+      });
 
-    if (!settlement) {
-      return res.status(404).json({ message: "Settlement not found" });
+      if (!membership) {
+        return res.status(403).json({ message: "Access denied" });
+      }
     }
 
-    // Only involved users can delete the settlement
-    if (
-      settlement.fromUserId !== req.userId &&
-      settlement.toUserId !== req.userId
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    const summary = await getUserSettlementSummary(req.userId, groupId);
 
-    await prisma.settlement.delete({
-      where: { id: settlementId },
-    });
-
-    res.json({ message: "Settlement deleted successfully" });
+    res.json(summary);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });

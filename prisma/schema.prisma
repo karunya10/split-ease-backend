@@ -74,6 +74,7 @@ model Settlement {
   toUserId     String
   groupId      String?
   amount       Decimal
+  status       String   @default("PENDING") // PENDING, PAID
   createdAt    DateTime @default(now())
 
   fromUser     User     @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
