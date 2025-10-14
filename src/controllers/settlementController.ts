@@ -57,14 +57,16 @@ export async function getUserSettlementSummaryEndpoint(
       return res.status(400).json({ message: "Missing user ID" });
     }
 
-    if (groupId) {
-      const membership = await prisma.groupMember.findFirst({
-        where: { groupId, userId: req.userId },
-      });
+    if (!groupId) {
+      return res.status(400).json({ message: "Missing group ID" });
+    }
 
-      if (!membership) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+    const membership = await prisma.groupMember.findFirst({
+      where: { groupId, userId: req.userId },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     const summary = await getUserSettlementSummary(req.userId, groupId);
