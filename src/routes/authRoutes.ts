@@ -58,6 +58,59 @@ router.post("/login", async (req, res) => {
   }
 });
 
+router.post("/google", async (req, res) => {
+  try {
+    const { email, name, googleId, picture } = req.body;
+
+    // Validate required fields
+    if (!email || !googleId) {
+      return res
+        .status(400)
+        .json({ message: "Email and Google ID are required" });
+    }
+
+    // Check if user exists by email
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      // User exists - update their Google OAuth data
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId,
+          picture,
+          provider: "google",
+          name: name || user.name, // Keep existing name if new one not provided
+        },
+      });
+    } else {
+      // User doesn't exist - create new user
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          googleId,
+          picture,
+          provider: "google",
+        },
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name },
+    });
+  } catch (err) {
+    console.error("Google OAuth error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.get("/verify", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];

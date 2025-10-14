@@ -14,7 +14,9 @@ model User {
   password String?
   image    String?
   emailVerified DateTime?
-
+  googleId String?  @unique
+  picture  String?
+  provider String?  @default("email")
 
   groups         GroupMember[]
   expensesPaid   Expense[]

@@ -14,7 +14,7 @@ export async function addMemberToGroup(req: AuthRequest, res: Response) {
 
     // Check if user is admin/owner of the group
     const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: req.userId, role: { in: ["admin", "owner"] } },
+      where: { groupId, userId: req.userId, role: { in: ["owner", "member"] } },
     });
 
     if (!membership) {
