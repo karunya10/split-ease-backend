@@ -57,7 +57,6 @@ export async function getUserSettlementSummaryEndpoint(
       return res.status(400).json({ message: "Missing user ID" });
     }
 
-    // If groupId is provided, check if user is member of the group
     if (groupId) {
       const membership = await prisma.groupMember.findFirst({
         where: { groupId, userId: req.userId },

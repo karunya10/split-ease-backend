@@ -21,7 +21,6 @@ router.get("/search", verifyToken, async (req, res) => {
         .json({ message: "Search term must be at least 2 characters long" });
     }
 
-    // Search users by email or name (case-insensitive)
     const users = await prisma.user.findMany({
       where: {
         OR: [
@@ -44,7 +43,7 @@ router.get("/search", verifyToken, async (req, res) => {
         name: true,
         email: true,
       },
-      take: 10, // Limit results to prevent overwhelming response
+      take: 10,
     });
 
     res.json({
