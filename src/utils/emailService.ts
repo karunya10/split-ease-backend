@@ -1,37 +1,20 @@
-import nodemailer from "nodemailer";
-
+import { Resend } from "resend";
 
 const isEmailConfigured = () => {
-  return !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  return !!process.env.RESEND_API_KEY;
 };
 
-
-let transporter: nodemailer.Transporter | null = null;
+let resend: Resend | null = null;
 
 if (isEmailConfigured()) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: parseInt(process.env.SMTP_PORT || "587", 10),
-    secure: false, 
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
-  transporter.verify((error: any, success: any) => {
-    if (error) {
-      console.log("❌ Email configuration error:", error.message);
-    } else {
-      console.log("✅ Email server is ready to send messages");
-    }
-  });
+  resend = new Resend(process.env.RESEND_API_KEY);
+  console.log("✅ Resend email service initialized");
 } else {
   console.log(
-    "⚠️  Email not configured - SMTP_USER and SMTP_PASS environment variables are missing"
+    "⚠️  Email not configured - RESEND_API_KEY environment variable is missing"
   );
   console.log(
-    "   Email notifications will be disabled until credentials are provided"
+    "   Email notifications will be disabled until API key is provided"
   );
 }
 
@@ -43,22 +26,38 @@ export interface EmailData {
 }
 
 export async function sendEmail(emailData: EmailData): Promise<boolean> {
-
-  if (!transporter || !isEmailConfigured()) {
-    console.log("📧 Email not sent - SMTP not configured");
+  if (!resend || !isEmailConfigured()) {
+    console.log("📧 Email not sent - Resend not configured");
     return false;
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: `"SplitEase" <${process.env.SMTP_USER}>`,
-      to: emailData.to,
-      subject: emailData.subject,
-      text: emailData.text,
-      html: emailData.html,
-    });
+    // Convert string array to array if needed
+    const recipients = Array.isArray(emailData.to)
+      ? emailData.to
+      : [emailData.to];
 
-    console.log("✅ Email sent successfully:", info.messageId);
+    // Prepare email options for Resend
+    const emailOptions: any = {
+      from: process.env.FROM_EMAIL || "SplitEase <noreply@yourdomain.com>",
+      to: recipients,
+      subject: emailData.subject,
+      html: emailData.html,
+    };
+
+    // Only include text if it's provided
+    if (emailData.text) {
+      emailOptions.text = emailData.text;
+    }
+
+    const { data, error } = await resend.emails.send(emailOptions);
+
+    if (error) {
+      console.error("❌ Error sending email:", error);
+      return false;
+    }
+
+    console.log("✅ Email sent successfully:", data?.id);
     return true;
   } catch (error) {
     console.error(
