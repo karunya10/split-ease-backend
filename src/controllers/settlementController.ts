@@ -3,7 +3,6 @@ import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
 import { getUserSettlementSummary } from "../utils/settlementCalculator.js";
 
-// Mark settlement as paid (this could be implemented with a status field)
 export async function markSettlementPaid(req: AuthRequest, res: Response) {
   try {
     const { settlementId } = req.params;
@@ -20,19 +19,16 @@ export async function markSettlementPaid(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Settlement not found" });
     }
 
-    // Check if settlement is already paid
     if (settlement.status === "PAID") {
       return res.status(400).json({ message: "Settlement is already paid" });
     }
 
-    // Only the person who owes money can mark as paid
     if (settlement.fromUserId !== req.userId) {
       return res
         .status(403)
         .json({ message: "Only the payer can mark settlement as paid" });
     }
 
-    // Update settlement status to paid instead of deleting
     await prisma.settlement.update({
       where: { id: settlementId },
       data: { status: "PAID" },
@@ -45,7 +41,6 @@ export async function markSettlementPaid(req: AuthRequest, res: Response) {
   }
 }
 
-// Get user settlement summary
 export async function getUserSettlementSummaryEndpoint(
   req: AuthRequest,
   res: Response

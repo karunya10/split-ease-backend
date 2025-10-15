@@ -62,29 +62,25 @@ router.post("/google", async (req, res) => {
   try {
     const { email, name, googleId, picture } = req.body;
 
-    // Validate required fields
     if (!email || !googleId) {
       return res
         .status(400)
         .json({ message: "Email and Google ID are required" });
     }
 
-    // Check if user exists by email
     let user = await prisma.user.findUnique({ where: { email } });
 
     if (user) {
-      // User exists - update their Google OAuth data
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
           googleId,
           picture,
           provider: "google",
-          name: name || user.name, // Keep existing name if new one not provided
+          name: name || user.name,
         },
       });
     } else {
-      // User doesn't exist - create new user
       user = await prisma.user.create({
         data: {
           email,
@@ -96,7 +92,6 @@ router.post("/google", async (req, res) => {
       });
     }
 
-    // Generate JWT token
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
       expiresIn: "7d",
     });

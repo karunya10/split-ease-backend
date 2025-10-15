@@ -2,8 +2,72 @@ import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
 import { updateGroupSettlements } from "../utils/settlementCalculator.js";
+import {
+  sendEmail,
+  generateExpenseNotificationEmail,
+} from "../utils/emailService.js";
 
-// Create new expense
+async function notifyGroupMembers(expense: any, groupId: string) {
+  try {
+    const groupMembers = await prisma.groupMember.findMany({
+      where: { groupId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+        group: {
+          select: { name: true },
+        },
+      },
+    });
+
+    const membersToNotify = groupMembers;
+
+    if (membersToNotify.length === 0) {
+      console.log(
+        "No members to notify (no email addresses or only payer in group)"
+      );
+      return;
+    }
+
+    const expenseData = {
+      description: expense.description,
+      amount: parseFloat(expense.amount.toString()),
+      paidByName: expense.paidBy.name || expense.paidBy.email || "Unknown",
+      groupName: groupMembers[0]?.group.name || "Unknown Group",
+    };
+
+    const emailPromises = membersToNotify.map(async (member) => {
+      const { subject, html, text } = generateExpenseNotificationEmail(
+        expenseData,
+        member.user.name || member.user.email || "Member"
+      );
+
+      return sendEmail({
+        to: member.user.email!,
+        subject,
+        html,
+        text,
+      });
+    });
+
+    const results = await Promise.allSettled(emailPromises);
+
+    const successful = results.filter(
+      (result) => result.status === "fulfilled" && result.value
+    ).length;
+    const failed = results.length - successful;
+
+    if (successful > 0 || failed > 0) {
+      console.log(
+        `📧 Email notifications: ${successful} sent, ${failed} failed out of ${membersToNotify.length} members`
+      );
+    }
+  } catch (error) {
+    console.error("Error sending email notifications:", error);
+  }
+}
+
 export async function createExpense(req: AuthRequest, res: Response) {
   try {
     const { groupId } = req.params;
@@ -53,12 +117,18 @@ export async function createExpense(req: AuthRequest, res: Response) {
       },
     });
 
-    // Automatically update settlements for the group
     try {
       await updateGroupSettlements(groupId);
     } catch (settlementError) {
       console.error("Error updating settlements:", settlementError);
-      // Don't fail the expense creation if settlement update fails
+    }
+
+    try {
+      notifyGroupMembers(expense, groupId).catch((error) => {
+        console.error("Background email notification error:", error);
+      });
+    } catch (notificationError) {
+      console.error("Error starting email notifications:", notificationError);
     }
 
     res.status(201).json(expense);
@@ -68,7 +138,6 @@ export async function createExpense(req: AuthRequest, res: Response) {
   }
 }
 
-// Delete expense
 export async function deleteExpense(req: AuthRequest, res: Response) {
   try {
     const { groupId, expenseId } = req.params;
@@ -77,7 +146,6 @@ export async function deleteExpense(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: "Missing required parameters" });
     }
 
-    // Check if user has permission (member of group and either expense creator or admin)
     const membership = await prisma.groupMember.findFirst({
       where: { groupId, userId: req.userId },
     });
@@ -94,7 +162,6 @@ export async function deleteExpense(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Expense not found" });
     }
 
-    // Only the person who created the expense or admin can delete it
     const isAdmin = membership.role === "admin" || membership.role === "owner";
     const isCreator = expense.paidById === req.userId;
 
@@ -108,12 +175,10 @@ export async function deleteExpense(req: AuthRequest, res: Response) {
       where: { id: expenseId },
     });
 
-    // Automatically update settlements for the group
     try {
       await updateGroupSettlements(groupId);
     } catch (settlementError) {
       console.error("Error updating settlements:", settlementError);
-      // Don't fail the expense deletion if settlement update fails
     }
 
     res.json({ message: "Expense deleted successfully" });

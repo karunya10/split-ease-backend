@@ -14,7 +14,7 @@ router.patch(
   markSettlementPaid
 );
 
-// Get user settlement summary for a specific group
+
 router.get(
   "/:groupId/settlements/summary",
   verifyToken,

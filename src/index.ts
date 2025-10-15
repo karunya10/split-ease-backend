@@ -22,10 +22,5 @@ app.use("/groups", memberRoutes);
 app.use("/groups", expenseRoutes);
 app.use("/groups", settlementRoutes);
 
-// Protected route example
-app.get("/profile", verifyToken, (req, res) => {
-  res.json({ message: "Token is valid. You are authenticated!" });
-});
-
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

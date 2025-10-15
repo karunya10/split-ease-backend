@@ -4,7 +4,6 @@ import { verifyToken } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Search users by email or name
 router.get("/search", verifyToken, async (req, res) => {
   try {
     const { q } = req.query;
