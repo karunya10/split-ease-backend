@@ -4,11 +4,35 @@ const isEmailConfigured = () => {
   return !!process.env.RESEND_API_KEY;
 };
 
+const isEmailEnabled = () => {
+  // Check if email is explicitly disabled
+  if (process.env.DISABLE_EMAIL === "true") {
+    return false;
+  }
+  // Default to enabled if RESEND_API_KEY is configured
+  return isEmailConfigured();
+};
+
+// Granular email control functions
+export const isExpenseNotificationEnabled = () => {
+  return (
+    isEmailEnabled() && process.env.DISABLE_EXPENSE_NOTIFICATIONS !== "true"
+  );
+};
+
+export const isSettlementNotificationEnabled = () => {
+  return (
+    isEmailEnabled() && process.env.DISABLE_SETTLEMENT_NOTIFICATIONS !== "true"
+  );
+};
+
 let resend: Resend | null = null;
 
-if (isEmailConfigured()) {
+if (isEmailEnabled() && isEmailConfigured()) {
   resend = new Resend(process.env.RESEND_API_KEY);
   console.log("✅ Resend email service initialized");
+} else if (process.env.DISABLE_EMAIL === "true") {
+  console.log("📧 Email service disabled by DISABLE_EMAIL flag");
 } else {
   console.log(
     "⚠️  Email not configured - RESEND_API_KEY environment variable is missing"
@@ -26,6 +50,11 @@ export interface EmailData {
 }
 
 export async function sendEmail(emailData: EmailData): Promise<boolean> {
+  if (!isEmailEnabled()) {
+    console.log("📧 Email not sent - Email service disabled");
+    return false;
+  }
+
   if (!resend || !isEmailConfigured()) {
     console.log("📧 Email not sent - Resend not configured");
     return false;
