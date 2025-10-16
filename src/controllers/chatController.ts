@@ -2,7 +2,57 @@ import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
 
-// Create conversation for a group (or return existing one)
+// Get conversation for a group
+export const getGroupConversation = async (req: AuthRequest, res: Response) => {
+  try {
+    const { groupId } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!groupId) {
+      return res.status(400).json({ error: "Group ID is required" });
+    }
+
+    // Check if user is a member of the group
+    const groupMember = await prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId,
+      },
+    });
+
+    if (!groupMember) {
+      return res
+        .status(403)
+        .json({ error: "You are not a member of this group" });
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { groupId },
+      include: {
+        group: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!conversation) {
+      return res
+        .status(404)
+        .json({ error: "Conversation not found for this group" });
+    }
+
+    res.json(conversation);
+  } catch (error) {
+    console.error("Error getting conversation:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Create conversation for a group
 export const createGroupConversation = async (
   req: AuthRequest,
   res: Response
@@ -33,8 +83,19 @@ export const createGroupConversation = async (
         .json({ error: "You are not a member of this group" });
     }
 
-    let conversation = await prisma.conversation.findUnique({
+    // Check if conversation already exists
+    const existingConversation = await prisma.conversation.findUnique({
       where: { groupId },
+    });
+
+    if (existingConversation) {
+      return res
+        .status(409)
+        .json({ error: "Conversation already exists for this group" });
+    }
+
+    const conversation = await prisma.conversation.create({
+      data: { groupId },
       include: {
         group: {
           select: { id: true, name: true },
@@ -42,18 +103,7 @@ export const createGroupConversation = async (
       },
     });
 
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { groupId },
-        include: {
-          group: {
-            select: { id: true, name: true },
-          },
-        },
-      });
-    }
-
-    res.json(conversation);
+    res.status(201).json(conversation);
   } catch (error) {
     console.error("Error creating conversation:", error);
     res.status(500).json({ error: "Internal server error" });
