@@ -5,15 +5,12 @@ const isEmailConfigured = () => {
 };
 
 const isEmailEnabled = () => {
-  // Check if email is explicitly disabled
   if (process.env.DISABLE_EMAIL === "true") {
     return false;
   }
-  // Default to enabled if RESEND_API_KEY is configured
   return isEmailConfigured();
 };
 
-// Granular email control functions
 export const isExpenseNotificationEnabled = () => {
   return (
     isEmailEnabled() && process.env.DISABLE_EXPENSE_NOTIFICATIONS !== "true"
@@ -61,12 +58,10 @@ export async function sendEmail(emailData: EmailData): Promise<boolean> {
   }
 
   try {
-    // Convert string array to array if needed
     const recipients = Array.isArray(emailData.to)
       ? emailData.to
       : [emailData.to];
 
-    // Prepare email options for Resend
     const emailOptions: any = {
       from: process.env.FROM_EMAIL || "SplitEase <noreply@yourdomain.com>",
       to: recipients,
@@ -74,7 +69,6 @@ export async function sendEmail(emailData: EmailData): Promise<boolean> {
       html: emailData.html,
     };
 
-    // Only include text if it's provided
     if (emailData.text) {
       emailOptions.text = emailData.text;
     }

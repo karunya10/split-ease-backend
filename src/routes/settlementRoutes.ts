@@ -7,13 +7,11 @@ import {
 
 const router = express.Router();
 
-// Mark settlement as paid
 router.patch(
   "/settlements/:settlementId/paid",
   verifyToken,
   markSettlementPaid
 );
-
 
 router.get(
   "/:groupId/settlements/summary",

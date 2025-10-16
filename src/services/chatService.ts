@@ -18,7 +18,7 @@ export class ChatService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: "*", // Configure this properly for production
+        origin: "*",
         methods: ["GET", "POST"],
       },
     });
@@ -38,7 +38,6 @@ export class ChatService {
 
         const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
 
-        // Verify user exists
         const user = await prisma.user.findUnique({
           where: { id: decoded.userId },
         });
@@ -47,7 +46,6 @@ export class ChatService {
           return next(new Error("User not found"));
         }
 
-        // Store user info in socket
         (socket as any).userId = decoded.userId;
         this.authenticatedSockets.set(socket.id, {
           userId: decoded.userId,
@@ -72,7 +70,6 @@ export class ChatService {
         await this.handleSendMessage(socket, data);
       });
 
-      // Handle disconnect
       socket.on("disconnect", () => {
         console.log(`User ${userId} disconnected`);
         this.authenticatedSockets.delete(socket.id);
@@ -82,7 +79,6 @@ export class ChatService {
 
   private async joinUserGroups(socket: any, userId: string) {
     try {
-      // Get all groups the user is a member of
       const userGroups = await prisma.groupMember.findMany({
         where: { userId },
         include: {
@@ -94,7 +90,6 @@ export class ChatService {
         },
       });
 
-      // Join socket to each group's conversation room
       userGroups.forEach((groupMember) => {
         if (groupMember.group.conversation) {
           const roomName = `conversation_${groupMember.group.conversation.id}`;
@@ -123,7 +118,6 @@ export class ChatService {
         return;
       }
 
-      // Verify user has access to this conversation
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
         include: {
@@ -144,7 +138,6 @@ export class ChatService {
         return;
       }
 
-      // Create the message
       const message = await prisma.message.create({
         data: {
           conversationId,
@@ -164,11 +157,9 @@ export class ChatService {
         },
       });
 
-      // Emit the message to all users in the conversation room
       const roomName = `conversation_${conversationId}`;
       this.io.to(roomName).emit("new_message", message);
 
-      // Send confirmation to sender
       socket.emit("message_sent", { messageId: message.id });
     } catch (error) {
       console.error("Error sending message:", error);
@@ -176,7 +167,6 @@ export class ChatService {
     }
   }
 
- 
   public async addUserToConversationRoom(
     userId: string,
     conversationId: string

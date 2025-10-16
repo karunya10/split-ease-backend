@@ -2,7 +2,6 @@ import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
 
-// Get conversation for a group
 export const getGroupConversation = async (req: AuthRequest, res: Response) => {
   try {
     const { groupId } = req.params;
@@ -16,7 +15,6 @@ export const getGroupConversation = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Group ID is required" });
     }
 
-    // Check if user is a member of the group
     const groupMember = await prisma.groupMember.findFirst({
       where: {
         groupId,
@@ -52,7 +50,6 @@ export const getGroupConversation = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Create conversation for a group
 export const createGroupConversation = async (
   req: AuthRequest,
   res: Response
@@ -69,7 +66,6 @@ export const createGroupConversation = async (
       return res.status(400).json({ error: "Group ID is required" });
     }
 
-    // Check if user is a member of the group
     const groupMember = await prisma.groupMember.findFirst({
       where: {
         groupId,
@@ -83,7 +79,6 @@ export const createGroupConversation = async (
         .json({ error: "You are not a member of this group" });
     }
 
-    // Check if conversation already exists
     const existingConversation = await prisma.conversation.findUnique({
       where: { groupId },
     });
@@ -110,7 +105,6 @@ export const createGroupConversation = async (
   }
 };
 
-// Get messages for a conversation
 export const getMessages = async (req: AuthRequest, res: Response) => {
   try {
     const { conversationId } = req.params;
@@ -125,14 +119,12 @@ export const getMessages = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Conversation ID is required" });
     }
 
-    // Validate and parse pagination parameters
     const pageNum = Math.max(1, parseInt(page as string) || 1);
     const limitNum = Math.min(
       100,
       Math.max(1, parseInt(limit as string) || 50)
     );
 
-    // Check if user has access to this conversation
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -175,7 +167,6 @@ export const getMessages = async (req: AuthRequest, res: Response) => {
       take: limitNum,
     });
 
-    // Reverse to show oldest first
     const reversedMessages = messages.reverse();
 
     res.json({

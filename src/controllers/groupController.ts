@@ -35,7 +35,6 @@ export async function createGroup(req: AuthRequest, res: Response) {
       },
     });
 
-    // Add the owner to the conversation room
     if (group.conversation) {
       await chatService.addUserToConversationRoom(
         req.userId,

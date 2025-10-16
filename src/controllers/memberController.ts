@@ -50,7 +50,6 @@ export async function addMemberToGroup(req: AuthRequest, res: Response) {
       },
     });
 
-    // Add user to conversation room if conversation exists
     if (newMember.group.conversation) {
       await chatService.addUserToConversationRoom(
         userId,
