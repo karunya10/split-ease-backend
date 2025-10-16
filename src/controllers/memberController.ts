@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
+import { chatService } from "../index.js";
 
 export async function addMemberToGroup(req: AuthRequest, res: Response) {
   try {
@@ -41,8 +42,21 @@ export async function addMemberToGroup(req: AuthRequest, res: Response) {
         user: {
           select: { id: true, name: true, email: true },
         },
+        group: {
+          include: {
+            conversation: true,
+          },
+        },
       },
     });
+
+    // Add user to conversation room if conversation exists
+    if (newMember.group.conversation) {
+      await chatService.addUserToConversationRoom(
+        userId,
+        newMember.group.conversation.id
+      );
+    }
 
     res.status(201).json(newMember);
   } catch (error) {

@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware.js";
 import prisma from "../prisma.js";
+import { chatService } from "../index.js";
 
 export async function createGroup(req: AuthRequest, res: Response) {
   try {
@@ -15,7 +16,15 @@ export async function createGroup(req: AuthRequest, res: Response) {
     }
 
     const group = await prisma.group.create({
-      data: { name },
+      data: {
+        name,
+        conversation: {
+          create: {},
+        },
+      },
+      include: {
+        conversation: true,
+      },
     });
 
     await prisma.groupMember.create({
@@ -25,6 +34,14 @@ export async function createGroup(req: AuthRequest, res: Response) {
         role: "owner",
       },
     });
+
+    // Add the owner to the conversation room
+    if (group.conversation) {
+      await chatService.addUserToConversationRoom(
+        req.userId,
+        group.conversation.id
+      );
+    }
 
     res.status(201).json(group);
   } catch (error) {

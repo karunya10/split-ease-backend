@@ -23,6 +23,7 @@ model User {
   splits         ExpenseSplit[]
   settlementsFrom   Settlement[] @relation("FromUser")  
   settlementsTo     Settlement[] @relation("ToUser") 
+  messages       Message[]    @relation("SentMessages")
   createdAt         DateTime     @default(now())
 }
 
@@ -32,6 +33,7 @@ model Group {
   members  GroupMember[]
   expenses  Expense[]
   settlements  Settlement[] 
+  conversation Conversation?
   createdAt DateTime    @default(now())
 }
 
@@ -82,5 +84,27 @@ model Settlement {
   fromUser     User     @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
   toUser       User     @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
   group        Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  groupId   String    @unique // One conversation per group
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  messageType    String       @default("TEXT") 
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 }
 

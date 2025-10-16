@@ -9,7 +9,7 @@ import {
 } from "../utils/emailService.js";
 
 async function notifyGroupMembers(expense: any, groupId: string) {
-  // Check if expense notifications are enabled
+
   if (!isExpenseNotificationEnabled()) {
     console.log("📧 Expense notifications are disabled");
     return;
