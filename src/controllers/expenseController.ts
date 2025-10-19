@@ -9,7 +9,6 @@ import {
 } from "../utils/emailService.js";
 
 async function notifyGroupMembers(expense: any, groupId: string) {
-
   if (!isExpenseNotificationEnabled()) {
     console.log("📧 Expense notifications are disabled");
     return;
@@ -28,9 +27,7 @@ async function notifyGroupMembers(expense: any, groupId: string) {
       },
     });
 
-    const membersToNotify = groupMembers;
-
-    if (membersToNotify.length === 0) {
+    if (groupMembers.length === 0) {
       console.log(
         "No members to notify (no email addresses or only payer in group)"
       );
@@ -44,7 +41,7 @@ async function notifyGroupMembers(expense: any, groupId: string) {
       groupName: groupMembers[0]?.group.name || "Unknown Group",
     };
 
-    const emailPromises = membersToNotify.map(async (member) => {
+    const emailPromises = groupMembers.map(async (member) => {
       const { subject, html, text } = generateExpenseNotificationEmail(
         expenseData,
         member.user.name || member.user.email || "Member"
@@ -67,7 +64,7 @@ async function notifyGroupMembers(expense: any, groupId: string) {
 
     if (successful > 0 || failed > 0) {
       console.log(
-        `📧 Email notifications: ${successful} sent, ${failed} failed out of ${membersToNotify.length} members`
+        `📧 Email notifications: ${successful} sent, ${failed} failed out of ${groupMembers.length} members`
       );
     }
   } catch (error) {

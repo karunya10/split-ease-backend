@@ -17,12 +17,6 @@ export const isExpenseNotificationEnabled = () => {
   );
 };
 
-export const isSettlementNotificationEnabled = () => {
-  return (
-    isEmailEnabled() && process.env.DISABLE_SETTLEMENT_NOTIFICATIONS !== "true"
-  );
-};
-
 let resend: Resend | null = null;
 
 if (isEmailEnabled() && isEmailConfigured()) {
